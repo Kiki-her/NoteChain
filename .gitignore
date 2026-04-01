@@ -1,0 +1,104 @@
+# ========================
+# NoteChain — .gitignore
+# iOS + Xcode + Claude Code + macOS
+# ========================
+
+# ---- Xcode ----
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcworkspace/xcshareddata/
+xcuserdata/
+DerivedData/
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+
+# ---- Build outputs ----
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.xcarchive
+
+# ---- CocoaPods ----
+Pods/
+Podfile.lock
+
+# ---- Swift Package Manager ----
+.build/
+.swiftpm/
+Package.resolved
+
+# ---- SwiftData / Core Data ----
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# ---- macOS system files ----
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# ---- Editor temporary files ----
+*.swp
+*.swo
+*~
+.idea/
+*.iml
+
+# ---- Claude Code ----
+# Settings (gitignore sensitive keys but track rules)
+.claude/settings.local.json
+
+# ---- Environment / Secrets ----
+.env
+.env.local
+*.pem
+*.p12
+*.mobileprovision
+AuthKey_*.p8
+
+# ---- TestFlight / App Store Connect ----
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# ---- Fastlane 生成物 ----
+fastlane/README.md
+fastlane/metadata/
+fastlane/Deliverfile
+
+# ---- Xcode テスト結果 ----
+*.xcresult
+TestResults/
+test-results/
+
+# ---- DerivedData（念のため明示）----
+DerivedData/
+~/Library/Developer/Xcode/DerivedData/
+
+# ---- Gemini CLI ----
+.gemini/
+gemini_cache/
+
+# ---- Simulator ----
+*.simctl
+
+# ---- Coverage ----
+*.gcov
+*.gcda
+*.gcno
+coverage/

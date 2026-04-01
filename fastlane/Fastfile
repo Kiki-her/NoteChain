@@ -1,0 +1,250 @@
+# fastlane/Fastfile
+# NoteChain CI/CD — Xcode 26 + Swift 6.0 前提
+# Fastlane ドキュメント: https://docs.fastlane.tools
+#
+# 必要な環境変数（CI/CD シークレットに登録すること）:
+#   APP_STORE_CONNECT_API_KEY_KEY_ID      — App Store Connect API Key ID
+#   APP_STORE_CONNECT_API_KEY_ISSUER_ID   — Issuer ID
+#   APP_STORE_CONNECT_API_KEY_KEY_CONTENT — .p8 ファイルの内容（Base64 または改行付き文字列）
+#   MATCH_PASSWORD                        — Match 暗号化パスワード
+#   MATCH_GIT_URL                         — Match 証明書リポジトリ URL（Matchfile で設定済みの場合は不要）
+
+# ──────────────────────────────────────────────────────────────
+# 定数
+# ──────────────────────────────────────────────────────────────
+
+APP_SCHEME            = "NoteChain"
+APP_BUNDLE_ID         = "com.yourcompany.notechain"
+WORKSPACE             = "NoteChain.xcworkspace"
+PROJECT               = "NoteChain.xcodeproj"
+# xcworkspace が存在しない場合は xcodeproj を直接使う
+BUILD_PATH            = "build"
+ARCHIVE_PATH          = "#{BUILD_PATH}/NoteChain.xcarchive"
+IPA_PATH              = "#{BUILD_PATH}/NoteChain.ipa"
+# iOS 17.0 がデプロイメントターゲット（PRD 準拠）
+MINIMUM_DEPLOYMENT_TARGET = "17.0"
+# テスト対象シミュレーター（Xcode 26 の iPhone 16 Pro を使用）
+TEST_DEVICE           = "iPhone 16 Pro"
+TEST_OS               = "latest"
+
+# ──────────────────────────────────────────────────────────────
+# 共通: App Store Connect API Key 認証セットアップ
+# ──────────────────────────────────────────────────────────────
+
+def setup_api_key
+  app_store_connect_api_key(
+    key_id:        ENV.fetch("APP_STORE_CONNECT_API_KEY_KEY_ID",     ""),
+    issuer_id:     ENV.fetch("APP_STORE_CONNECT_API_KEY_ISSUER_ID",  ""),
+    # key_content に .p8 の内容を直接渡す（ファイルパスではなく文字列）
+    # CI では Base64 デコードが必要な場合は下記のように変換:
+    # key_content: Base64.decode64(ENV["APP_STORE_CONNECT_API_KEY_KEY_CONTENT"])
+    key_content:   ENV.fetch("APP_STORE_CONNECT_API_KEY_KEY_CONTENT", ""),
+    is_key_content_base64: false,
+    duration:      1200,  # セッション有効時間（秒）最大 1200
+    in_house:      false  # App Store 配信（Enterprise 以外）
+  )
+end
+
+# ──────────────────────────────────────────────────────────────
+# 共通: ビルド番号をタイムスタンプ (YYYYMMDDHHII) で自動インクリメント
+# ──────────────────────────────────────────────────────────────
+
+def bump_build_number
+  build_number = Time.now.strftime("%Y%m%d%H%M")
+  increment_build_number(
+    build_number: build_number,
+    xcodeproj:    PROJECT
+  )
+  UI.success("ビルド番号を #{build_number} に設定しました")
+  build_number
+end
+
+# ──────────────────────────────────────────────────────────────
+# レーン: tests — ユニットテスト + コードカバレッジ
+# ──────────────────────────────────────────────────────────────
+
+lane :tests do
+  UI.message("🧪 NoteChain テスト実行開始")
+
+  # Swift Testing は Xcode 16+ でネイティブサポート
+  run_tests(
+    scheme:             APP_SCHEME,
+    project:            PROJECT,
+    device:             "#{TEST_DEVICE} (#{TEST_OS})",
+    code_coverage:      true,
+    # xcresult を build/ に出力
+    output_directory:   BUILD_PATH,
+    output_files:       "test_results.xml",
+    output_types:       "junit",
+    # 失敗時に xcresult を保持（CI アーティファクトとして使用）
+    fail_build:         true,
+    # Swift 6 Strict Concurrency 有効
+    xcargs:             "SWIFT_STRICT_CONCURRENCY=complete " \
+                        "SWIFT_VERSION=6.0 " \
+                        "IPHONEOS_DEPLOYMENT_TARGET=#{MINIMUM_DEPLOYMENT_TARGET}"
+  )
+
+  UI.success("✅ 全テスト通過")
+end
+
+# ──────────────────────────────────────────────────────────────
+# レーン: beta — TestFlight 配信
+# ──────────────────────────────────────────────────────────────
+
+lane :beta do
+  UI.message("🚀 NoteChain TestFlight 配信開始")
+
+  # 1. App Store Connect API Key 認証
+  api_key = setup_api_key
+
+  # 2. 証明書・プロファイル同期（Match）
+  sync_code_signing(
+    api_key:    api_key,
+    type:       "appstore",
+    app_identifier: APP_BUNDLE_ID,
+    readonly:   is_ci  # CI 環境では読み取り専用（証明書の上書き防止）
+  )
+
+  # 3. ビルド番号自動インクリメント
+  build_number = bump_build_number
+
+  # 4. アーカイブビルド
+  build_app(
+    scheme:                  APP_SCHEME,
+    project:                 PROJECT,
+    configuration:           "Release",
+    # Destination: Generic iOS Device（実機向けアーカイブ）
+    destination:             "generic/platform=iOS",
+    archive_path:            ARCHIVE_PATH,
+    output_directory:        BUILD_PATH,
+    output_name:             "NoteChain.ipa",
+    # Swift 6 + 最低デプロイメントターゲット設定
+    xcargs:                  "SWIFT_STRICT_CONCURRENCY=complete " \
+                             "SWIFT_VERSION=6.0 " \
+                             "IPHONEOS_DEPLOYMENT_TARGET=#{MINIMUM_DEPLOYMENT_TARGET} " \
+                             "OTHER_SWIFT_FLAGS=-strict-concurrency=complete",
+    # App Store Connect で管理する自動署名を使用
+    export_method:           "app-store",
+    export_options: {
+      method:                "app-store",
+      provisioningProfiles:  {
+        APP_BUNDLE_ID => "match AppStore #{APP_BUNDLE_ID}"
+      },
+      signingStyle:          "manual",
+      stripSwiftSymbols:     true,
+      uploadBitcode:         false,  # Bitcode は Xcode 14 以降非推奨
+      uploadSymbols:         true
+    }
+  )
+
+  # 5. TestFlight アップロード
+  upload_to_testflight(
+    api_key:               api_key,
+    ipa:                   IPA_PATH,
+    # 最新ビルドを beta グループに自動配信
+    distribute_external:   false,  # 外部テスター配信は手動で承認
+    notify_external_testers: false,
+    changelog:             changelog_from_git_commits(
+      commits_count: 5,
+      pretty:        "- %s",
+      merge_commit_filtering: "exclude_merges"
+    ),
+    # TestFlight のベータレビューをスキップ（内部テスター向け）
+    skip_waiting_for_build_processing: true
+  )
+
+  # 6. Git タグ付け（例: v1.0.0-beta.20260401120000）
+  version = get_version_number(xcodeproj: PROJECT, target: APP_SCHEME)
+  tag_name = "v#{version}-beta.#{build_number}"
+  add_git_tag(tag: tag_name)
+  push_git_tags
+
+  UI.success("✅ TestFlight 配信完了 — ビルド #{build_number} (#{tag_name})")
+end
+
+# ──────────────────────────────────────────────────────────────
+# レーン: release — App Store 本番リリース
+# ──────────────────────────────────────────────────────────────
+
+lane :release do
+  UI.message("🏪 NoteChain App Store リリース開始")
+
+  api_key = setup_api_key
+
+  sync_code_signing(
+    api_key:        api_key,
+    type:           "appstore",
+    app_identifier: APP_BUNDLE_ID,
+    readonly:       true
+  )
+
+  bump_build_number
+
+  build_app(
+    scheme:          APP_SCHEME,
+    project:         PROJECT,
+    configuration:   "Release",
+    destination:     "generic/platform=iOS",
+    archive_path:    ARCHIVE_PATH,
+    output_directory: BUILD_PATH,
+    output_name:     "NoteChain.ipa",
+    xcargs:          "SWIFT_STRICT_CONCURRENCY=complete " \
+                     "SWIFT_VERSION=6.0 " \
+                     "IPHONEOS_DEPLOYMENT_TARGET=#{MINIMUM_DEPLOYMENT_TARGET}",
+    export_method:   "app-store",
+    export_options: {
+      method:                "app-store",
+      provisioningProfiles:  {
+        APP_BUNDLE_ID => "match AppStore #{APP_BUNDLE_ID}"
+      },
+      signingStyle:          "manual",
+      stripSwiftSymbols:     true,
+      uploadBitcode:         false,
+      uploadSymbols:         true
+    }
+  )
+
+  upload_to_app_store(
+    api_key:               api_key,
+    ipa:                   IPA_PATH,
+    # 審査提出は手動（false = ストアに提出するが審査開始は手動）
+    submit_for_review:     false,
+    automatic_release:     false,
+    # メタデータ・スクリーンショットは Fastlane Deliver で管理（オプション）
+    skip_metadata:         true,
+    skip_screenshots:      true,
+    force:                 true
+  )
+
+  UI.success("✅ App Store アップロード完了（審査提出は手動で行ってください）")
+end
+
+# ──────────────────────────────────────────────────────────────
+# レーン: match_init — 初回 Match セットアップ（ローカルのみ実行）
+# ──────────────────────────────────────────────────────────────
+
+lane :match_init do
+  UI.message("🔑 Match 初期セットアップ")
+  api_key = setup_api_key
+  sync_code_signing(
+    api_key:        api_key,
+    type:           "appstore",
+    app_identifier: APP_BUNDLE_ID,
+    readonly:       false,
+    force:          false
+  )
+end
+
+# ──────────────────────────────────────────────────────────────
+# エラーハンドリング
+# ──────────────────────────────────────────────────────────────
+
+error do |lane, exception|
+  UI.error("❌ レーン [#{lane}] でエラーが発生しました: #{exception.message}")
+  # CI 環境では Slack 通知などを追加可能:
+  # slack(
+  #   message: "NoteChain ビルド失敗: #{exception.message}",
+  #   channel: "#notechain-ci",
+  #   slack_url: ENV["SLACK_WEBHOOK_URL"]
+  # )
+end

@@ -1,0 +1,191 @@
+# .coderabbit.yaml
+# CodeRabbit 自動コードレビュー設定
+# プラン: CodeRabbit Free（公開リポジトリ無料）
+# ドキュメント: https://docs.coderabbit.ai/getting-started/configure-coderabbit
+# 最終更新: 2026-04-01
+
+# ============================================================
+# 言語・ロケール設定
+# ============================================================
+language: "ja"
+
+# ============================================================
+# レビュー設定
+# ============================================================
+reviews:
+  # レビューモード: "assertive" = 厳格（全違反を指摘）
+  # 他の選択肢: "chill"（緩やか）, "default"（標準）
+  profile: "assertive"
+
+  # PR 作成・更新時に自動レビューを実行する
+  auto_review:
+    enabled: true
+    # ドラフト PR はレビュースキップ（実装途中の PR にノイズを出さない）
+    drafts: false
+    # ベースブランチへの直接プッシュはレビューしない
+    base_branches:
+      - "main"
+      - "develop"
+
+  # レビューコメントの言語
+  request_changes_workflow: false
+
+  # 高レベルのサマリーを PR 説明に追加する
+  high_level_summary: true
+
+  # レビュー観点のウォークスルーをコメントに追加する
+  poem: false
+
+  # ファイルウォークスルーをコメントに追加する
+  collapse_walkthrough: false
+
+  # コードサジェスチョン（修正候補）を表示する
+  auto_apply_labels: true
+
+# ============================================================
+# パス別レビュー指示
+# 各パスに対して具体的なレビュー基準を設定する
+# ============================================================
+  path_instructions:
+    # ----------------------------------------------------------
+    # Feature モジュール: Vertical Slice 遵守確認
+    # ----------------------------------------------------------
+    - path: "NoteChain/Features/**"
+      instructions: |
+        ## Vertical Slice アーキテクチャ確認
+
+        以下の観点でレビューしてください（日本語でコメントを書いてください）:
+
+        1. **@Observable 必須**
+           - ViewModel クラスに `@Observable` が付いているか確認する
+           - `ObservableObject` / `@Published` / `@ObservedObject` が使われていたら CRITICAL エラーとして指摘する
+           - ViewModel は必ず `@MainActor @Observable final class` の形式か確認する
+
+        2. **Vertical Slice 遵守**
+           - Feature ディレクトリ外のコードを直接参照していないか確認する
+           - 他 Feature への直接依存がある場合は `@Environment` 経由への変更を提案する
+           - `Shared/` からの import のみ許可される。他 Feature への import は禁止
+
+        3. **非同期処理パターン**
+           - `DispatchQueue` / Combine の使用は禁止。`async/await` + `Task` のみ許可
+           - `Task {}` 生成後に `deinit` または `.onDisappear` でキャンセルされているか確認する
+           - View 内の非同期起動は `.task {}` modifier のみ。`.onAppear { Task {} }` は禁止
+
+        4. **ローカライズ**
+           - `Text("...")` に英語などのハードコード文字列がある場合は `Localizable.xcstrings` キーへの変更を要求する
+
+        5. **SwiftData**
+           - `@Query` マクロの使用は禁止。`ModelContext.fetch(FetchDescriptor<T>())` への変更を提案する
+
+    # ----------------------------------------------------------
+    # Shared モデル: SwiftData @Model の正しい使用
+    # ----------------------------------------------------------
+    - path: "NoteChain/Shared/Models/**"
+      instructions: |
+        ## SwiftData @Model レビュー基準
+
+        以下の観点でレビューしてください（日本語でコメントを書いてください）:
+
+        1. **@Model 定義の正確性**
+           - `@Model` は `final class` にのみ適用されているか（`struct` への適用は禁止）
+           - 一意識別子には `@Attribute(.unique)` が付与されているか（`var id: UUID` に必須）
+           - 計算プロパティ（computed property）に `@Attribute` が付いていないか確認する（実行時クラッシュの原因）
+
+        2. **Sendable 準拠**
+           - `@Model` クラスをネットワーク越しに渡す場合 `Sendable` 準拠が必要
+           - SwiftData の `ModelContext` はスレッドセーフでないため、MainActor 外での使用を指摘する
+
+        3. **Relationship 定義**
+           - `@Relationship` には `deleteRule:` が明示されているか（カスケード削除の意図確認）
+           - オプショナル型の使用が適切か（null 安全性の確認）
+
+        4. **データ保護**
+           - `ModelConfiguration` に `fileProtection: .complete` が設定されているか確認する
+           - 機密データ（音声 URL 等）の適切な保護が行われているか
+
+        5. **Shared → Features 依存の禁止**
+           - このディレクトリのファイルが `Features/` を import していたら CRITICAL として指摘する
+
+    # ----------------------------------------------------------
+    # テストファイル: Given-When-Then 形式の確認
+    # ----------------------------------------------------------
+    - path: "**/*Tests*/**"
+      instructions: |
+        ## Swift Testing レビュー基準
+
+        以下の観点でレビューしてください（日本語でコメントを書いてください）:
+
+        1. **Swift Testing フレームワーク使用確認**
+           - `import XCTest` または `XCTestCase` が使われていたら `import Testing` + `@Test` への変更を要求する（CRITICAL）
+           - `XCTAssertEqual` 等の XCTest アサーションは `#expect()` に変更するよう指摘する
+           - `XCTestExpectation` は `async throws` + `await` パターンへの変更を要求する
+
+        2. **Given-When-Then 形式**
+           - `@Test("...")` のテスト名が Given-When-Then または Arrange-Act-Assert 形式で書かれているか確認する
+           - テスト名が抽象的すぎる（例: "test1", "checkValue"）場合、具体的な名前への変更を提案する
+
+        3. **テスト品質**
+           - `@MainActor` の `async` テストは `@Test` 関数に `async` が付いているか確認する
+           - InMemory SwiftData: `ModelConfiguration(isStoredInMemoryOnly: true)` が使われているか
+           - 実際の AVAudioEngine / SFSpeechRecognizer ではなく `MockSpeechService` を使っているか確認する
+
+        4. **境界値テスト**
+           - 空文字列・nil・空配列などの境界値テストが含まれているか確認する
+           - 正常系のみのテストに対してエラー系のテスト追加を提案する
+
+        5. **テストの独立性**
+           - テスト間で状態が共有されていないか（`static var` 等の共有状態は指摘する）
+           - `@Suite` の `init()` でセットアップが行われているか確認する
+
+    # ----------------------------------------------------------
+    # Shared Services: Protocol 抽象化の確認
+    # ----------------------------------------------------------
+    - path: "NoteChain/Shared/Services/**"
+      instructions: |
+        ## Service Protocol 抽象化レビュー基準
+
+        以下の観点でレビューしてください（日本語でコメントを書いてください）:
+
+        1. **Protocol 抽象化の徹底**
+           - Concrete クラス（`SpeechAnalyzerService` 等）が直接インスタンス化されず、
+             Protocol 型（`any SpeechRecognitionServiceProtocol`）で参照されているか確認する
+           - `init()` で Concrete 型を直接受け取っている場合は Protocol 型への変更を提案する
+
+        2. **Sendable 準拠**
+           - Protocol 定義に `Sendable` が含まれているか（`protocol XxxProtocol: Sendable`）
+           - `AsyncThrowingStream` を返す関数は非同期コンテキスト跨ぎに対応しているか
+
+        3. **Factory パターン**
+           - OS バージョン分岐（`#available(iOS 26, *)`）は Factory 内に閉じているか
+           - Factory 以外の場所で `#available` による実装切り替えをしていたら Factory への集約を提案する
+
+        4. **Mock 実装の存在確認**
+           - テスト用 `Mock` 実装が同ファイルまたはテストファイルに存在するか確認する
+           - Mock が Protocol を完全に実装しているか（全メソッド・プロパティ）
+
+        5. **エラーハンドリング**
+           - `AsyncThrowingStream` のエラーが `AppError` 型に変換されているか
+           - `CancellationError` が正常終了として扱われているか（エラー表示しない）
+
+        6. **プライバシー要件**
+           - `SFSpeechAudioBufferRecognitionRequest` を使う実装で
+             `requiresOnDeviceRecognition = true` が設定されているか（CRITICAL）
+           - 音声データをネットワーク経由で送信するコードがないか確認する
+
+# ============================================================
+# チャット機能設定
+# ============================================================
+chat:
+  # PR コメントへの返信でレビューの追加観点を提供する
+  auto_reply: true
+
+# ============================================================
+# ツールの有効/無効
+# ============================================================
+tools:
+  # GitHub Actions の実行結果をレビューに組み込む
+  github-checks:
+    enabled: true
+  # セキュリティ脆弱性のスキャン
+  ast-grep:
+    enabled: true
