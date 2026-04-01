@@ -163,3 +163,55 @@ Plan → Spec → Implement → Test → Review
 | `.claude/rules/swiftdata.md` | SwiftData / @Model |
 | `.claude/rules/testing.md` | Swift Testing |
 | `.claude/rules/subscription.md` | StoreKit 2 |
+
+---
+
+## CI/CD ルール
+
+### ブランチ戦略
+
+| ブランチ        | 用途                                           | 保護 |
+|----------------|------------------------------------------------|------|
+| `main`         | 本番リリースブランチ。直接プッシュ禁止。        | ✅ |
+| `develop`      | 開発ブランチ。Feature ブランチからの PR をマージ。| ✅ |
+| `feature/*`    | 機能開発ブランチ。develop から分岐、develop に PR。| - |
+| `release/v*`   | リリース準備ブランチ。タグ付けで TestFlight デプロイ。| - |
+
+### PR ルール
+
+- **NEVER** CodeRabbit の自動レビューが完了する前にマージする
+- **NEVER** CI (build + test) が失敗しているままマージする
+- **NEVER** Gemini レビューで CRITICAL 指摘がある場合にマージする
+- **ALWAYS** セルフレビュー後に PR を作成する（`.claude/skills/code-review/SKILL.md` 参照）
+
+### ワークフロー一覧
+
+| ファイル | トリガー | ランナー | 目的 |
+|---------|---------|---------|------|
+| `ci-build-test.yml` | push(main/develop), PR→main | macos-15 | Xcode 26.3 ビルド + Swift Testing |
+| `gemini-review.yml` | PR opened/sync | ubuntu-latest | Gemini CLI による Swift コードレビュー |
+| `cd-testflight.yml` | push tag `v*` | macos-15 | Fastlane beta → TestFlight |
+| `gemini-changelog.yml` | release published | ubuntu-latest | リリースノート自動生成（日英） |
+
+### リリースフロー
+
+```
+1. develop から release/vX.X.X ブランチを作成
+2. バージョン番号を更新（agvtool new-marketing-version X.X.X）
+3. PR を main に作成 → CI (build+test) + CodeRabbit + Gemini レビュー通過
+4. main にマージ後、git tag vX.X.X && git push origin vX.X.X
+5. cd-testflight.yml が自動実行 → TestFlight アップロード
+6. GitHub Releases で "Publish release" → gemini-changelog.yml が日英リリースノート生成
+```
+
+### 必要な GitHub Secrets
+
+| Secret 名 | 用途 | 取得元 |
+|-----------|------|-------|
+| `GOOGLE_API_KEY` | Gemini CLI API キー | https://aistudio.google.com/apikey |
+| `ASC_KEY_ID` | App Store Connect API Key ID | App Store Connect > ユーザーとアクセス > 統合 |
+| `ASC_ISSUER_ID` | App Store Connect Issuer ID | 同上 |
+| `ASC_PRIVATE_KEY` | .p8 ファイル内容（改行込み） | 同上（キー生成時のみダウンロード可） |
+| `MATCH_PASSWORD` | Match 証明書リポジトリの暗号化パスワード | 任意の強力なパスワード |
+| `MATCH_GIT_URL` | Match 証明書リポジトリ URL | プライベートリポジトリ URL |
+| `MATCH_GIT_TOKEN` | Match リポジトリへの PAT | GitHub Settings > Developer settings > PAT |
