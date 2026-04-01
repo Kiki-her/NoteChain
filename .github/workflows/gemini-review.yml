@@ -1,0 +1,303 @@
+# ============================================================
+# gemini-review.yml
+# NoteChain — Gemini CLI による AI コードレビュー
+#
+# トリガー: pull_request [opened, synchronize, reopened]
+#
+# ランナー: ubuntu-latest（macOS 不要・コストゼロ）
+# 目的: CodeRabbit が対応しきれない深い分析を Gemini CLI で補完
+#       - Swift 6 strict concurrency 違反の検出
+#       - @Observable パターン遵守確認
+#       - SwiftData @Query 禁止ルールの確認
+#       - Vertical Slice アーキテクチャ違反の検出
+#       - セキュリティ・プライバシー要件の確認
+#
+# 必要な Secrets:
+#   GOOGLE_API_KEY — Google AI Studio の API キー
+#                    https://aistudio.google.com/apikey から取得
+#                    （内部では GEMINI_API_KEY として渡す）
+#   GITHUB_TOKEN   — PR コメント投稿用（自動付与、追加設定不要）
+#
+# コスト: Gemini 2.5 Flash は無料枠で 1,500 req/day（2026年4月時点）
+# ============================================================
+
+name: AI Review — Gemini CLI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    # Swift ファイルと設定ファイルの変更時のみ実行（無駄なトリガーを避ける）
+    paths:
+      - '**.swift'
+      - '**.yaml'
+      - '**.yml'
+      - '**.json'
+
+# PR への書き込み権限（コメント投稿に必要）
+permissions:
+  contents: read
+  pull-requests: write
+
+# 同じ PR への連続プッシュで古いレビューをキャンセルする
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gemini-code-review:
+    name: Gemini CLI コードレビュー
+    runs-on: ubuntu-latest
+    timeout-minutes: 15  # Gemini API タイムアウト（分）
+
+    # ドラフト PR はレビューをスキップ（実装途中の PR にノイズを出さない）
+    if: github.event.pull_request.draft == false
+
+    steps:
+      # ──────────────────────────────────────────────────────
+      # 1. ソースコードをチェックアウト
+      #    fetch-depth: 0 で全履歴を取得し git diff が使えるようにする
+      # ──────────────────────────────────────────────────────
+      - name: ソースコードをチェックアウト（全履歴）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ──────────────────────────────────────────────────────
+      # 2. Node.js 20 をセットアップ
+      #    Gemini CLI は Node.js 18+ が必須
+      # ──────────────────────────────────────────────────────
+      - name: Node.js 20 をセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ──────────────────────────────────────────────────────
+      # 3. Gemini CLI をインストール
+      #    公式パッケージ: @google/gemini-cli
+      #    https://www.npmjs.com/package/@google/gemini-cli
+      # ──────────────────────────────────────────────────────
+      - name: Gemini CLI をインストール（@google/gemini-cli）
+        run: |
+          npm install -g @google/gemini-cli
+          # インストール確認
+          echo "=== Gemini CLI バージョン ==="
+          gemini --version || npx @google/gemini-cli --version || true
+
+      # ──────────────────────────────────────────────────────
+      # 4. PR の diff を取得
+      #    origin/main..HEAD の差分を取得して一時ファイルに保存
+      #    diff が大きすぎる場合はトークン制限のため Swift ファイルのみに絞る
+      # ──────────────────────────────────────────────────────
+      - name: PR の差分を取得（Swift ファイルのみ）
+        id: get-diff
+        run: |
+          # ベースブランチを fetch
+          git fetch origin ${{ github.base_ref }} --depth=1
+
+          # Swift ファイルのみの差分（トークン節約のため）
+          DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- '*.swift' 2>/dev/null || true)
+
+          if [ -z "$DIFF" ]; then
+            echo "Swift ファイルの変更がないため Gemini レビューをスキップします"
+            echo "has_swift_changes=false" >> $GITHUB_OUTPUT
+          else
+            # 差分が大きすぎる場合は先頭 8000 文字に制限（Gemini のトークン制限を考慮）
+            DIFF_TRUNCATED=$(echo "$DIFF" | head -c 8000)
+            if [ ${#DIFF} -gt 8000 ]; then
+              OMIT_MSG="...(差分が長いため省略されました。変更されたファイルの主要部分のみ表示)"
+              DIFF_TRUNCATED="${DIFF_TRUNCATED}${OMIT_MSG}"
+            fi
+
+            # 差分を一時ファイルに保存（マルチライン対応）
+            echo "$DIFF_TRUNCATED" > /tmp/pr_diff.txt
+            echo "has_swift_changes=true" >> $GITHUB_OUTPUT
+            echo "diff_size=${#DIFF}" >> $GITHUB_OUTPUT
+          fi
+
+      # ──────────────────────────────────────────────────────
+      # 5. AGENTS.md / CLAUDE.md のルールを読み込む
+      #    プロジェクト固有のルールを Gemini に渡すためのコンテキスト
+      # ──────────────────────────────────────────────────────
+      - name: レビュールールコンテキストを準備
+        id: prepare-context
+        if: steps.get-diff.outputs.has_swift_changes == 'true'
+        run: |
+          # AGENTS.md / GEMINI.md / 主要ルールファイルを結合
+          {
+            echo "=== プロジェクトルール ==="
+            cat AGENTS.md 2>/dev/null || true
+            cat GEMINI.md 2>/dev/null || true
+            echo ""
+            echo "=== Swift スタイルルール ==="
+            cat .claude/rules/swift-style.md 2>/dev/null || true
+            echo ""
+            echo "=== SwiftData ルール ==="
+            cat .claude/rules/swiftdata.md 2>/dev/null || true
+            echo ""
+            echo "=== セキュリティルール ==="
+            cat .claude/rules/security.md 2>/dev/null || true
+          } > /tmp/project_rules.txt
+          echo "ルールファイルを準備しました"
+
+      # ──────────────────────────────────────────────────────
+      # 6. Gemini CLI でコードレビューを実行
+      #
+      #    プロンプト設計:
+      #    - NoteChain の AGENTS.md / GEMINI.md ルールに基づく
+      #    - Swift 6 concurrency 違反の検出
+      #    - @Observable 使用確認（@ObservedObject/@Published 禁止）
+      #    - SwiftData パターン（@Query 禁止、FetchDescriptor 使用）
+      #    - Vertical Slice 依存方向（Shared → Features 禁止）
+      #    - セキュリティ（requiresOnDeviceRecognition、ネットワーク禁止）
+      #    - 日本語で出力
+      #
+      #    フラグ:
+      #    --yolo: CI 環境での自動承認（ファイル書き込みなし、読み取りのみ）
+      #    --output-format json: 構造化出力（jq で response 抽出）
+      #    -m gemini-2.5-flash: 高速・無料枠大きいモデルを使用
+      # ──────────────────────────────────────────────────────
+      - name: Gemini CLI でコードレビューを実行
+        id: gemini-review
+        if: steps.get-diff.outputs.has_swift_changes == 'true'
+        env:
+          # Gemini CLI は GEMINI_API_KEY を参照する
+          GEMINI_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          # プロンプトを構築（ヒアドキュメント使用）
+          PROMPT="あなたは NoteChain iOS アプリの厳格なコードレビュアーです。
+          以下の NoteChain プロジェクトルールに従って、この Pull Request の Swift コード差分を日本語でレビューしてください。
+
+          === レビュー観点（必ず全て確認すること）===
+
+          1. **Swift 6 Strict Concurrency**
+             - @MainActor なし ViewModel を検出したら CRITICAL エラーとして報告
+             - DispatchQueue.global() / DispatchQueue.main.async の使用を禁止
+             - async/await + Task のみ許可
+             - Task 生成後に deinit / .onDisappear でキャンセルされているか
+
+          2. **@Observable パターン**
+             - @ObservedObject / @Published / ObservableObject の使用は CRITICAL 違反
+             - ViewModel は必ず @MainActor @Observable final class の形式
+             - グローバル共有は @Environment(..) で（@EnvironmentObject 禁止）
+
+          3. **SwiftData パターン**
+             - @Query マクロの使用は CRITICAL 違反 → ModelContext.fetch(FetchDescriptor<T>()) を使う
+             - modelContext.save() は try/catch で囲み AppError にラップ
+             - @Model は final class のみに適用
+
+          4. **Vertical Slice アーキテクチャ**
+             - Shared/ レイヤーから Features/ への import は CRITICAL 違反
+             - Feature 間の直接参照は CRITICAL 違反（@Environment 経由のみ許可）
+
+          5. **セキュリティ・プライバシー**
+             - SFSpeechAudioBufferRecognitionRequest で requiresOnDeviceRecognition = true の設定必須
+             - ネットワーク通信（URLSession 等）の使用は禁止（StoreKit 2 を除く）
+             - print() での個人情報出力は禁止（#if DEBUG で囲む）
+
+          6. **ローカライズ**
+             - Text(\"...\") にハードコード文字列がある場合は違反として報告
+             - Localizable.xcstrings のキーを使うよう指摘
+
+          === 出力形式 ===
+
+          以下の形式で日本語でレポートを出力してください:
+
+          ## 🔍 Gemini CLI コードレビュー
+
+          ### 🔴 CRITICAL（必ず修正）
+          - [ファイル名:行番号] 問題の説明と修正コード例
+
+          ### 🟡 WARNING（推奨修正）
+          - [ファイル名:行番号] 問題の説明
+
+          ### ✅ 良い点
+          - 適切なパターンが使われている箇所
+
+          ### 📝 総評
+          全体的な評価と改善の優先順位
+
+          問題がなければ「✅ レビュー完了：全ての NoteChain ルールに準拠しています」とだけ出力してください。
+
+          === レビュー対象の差分 ==="
+
+          # 差分とプロンプトを結合して Gemini CLI に渡す
+          # --yolo: CI 環境での自動承認（読み取り専用操作のため安全）
+          # -m gemini-2.5-flash: 高速・無料枠大のモデル
+          # --output-format json: 構造化出力で response フィールドを抽出
+          REVIEW_RESULT=$(cat /tmp/pr_diff.txt \
+            | gemini \
+                --yolo \
+                -m gemini-2.5-flash \
+                --output-format json \
+                -p "$PROMPT" \
+            2>/dev/null)
+
+          # JSON から response フィールドを抽出
+          REVIEW_TEXT=$(echo "$REVIEW_RESULT" | jq -r '.response // "レビュー結果の取得に失敗しました"' 2>/dev/null \
+            || echo "Gemini CLI の実行に失敗しました。GOOGLE_API_KEY が正しく設定されているか確認してください。")
+
+          # レビュー結果を環境変数として次のステップに渡す（マルチライン対応）
+          echo "REVIEW_RESULT<<EOF" >> $GITHUB_ENV
+          echo "$REVIEW_TEXT" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          # ステップサマリーにも出力
+          echo "## 🤖 Gemini CLI コードレビュー結果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "$REVIEW_TEXT" >> $GITHUB_STEP_SUMMARY
+
+      # ──────────────────────────────────────────────────────
+      # 7. レビュー結果を PR コメントとして投稿
+      #    gh pr comment コマンドを使って GitHub PR にコメントを追加
+      #    --edit-last: 同じ PR への重複コメントを上書き（更新）
+      # ──────────────────────────────────────────────────────
+      - name: レビュー結果を PR コメントとして投稿
+        if: steps.get-diff.outputs.has_swift_changes == 'true' && steps.gemini-review.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # コメント本文を構築
+          COMMENT_BODY="## 🤖 Gemini CLI コードレビュー
+          > **モデル**: gemini-2.5-flash | **ルール**: AGENTS.md / GEMINI.md 準拠 | **言語**: 日本語
+
+          ${REVIEW_RESULT}
+
+          ---
+          <sub>このレビューは [Gemini CLI](https://github.com/google-gemini/gemini-cli) (@google/gemini-cli) によって自動生成されました。<br>
+          CodeRabbit のレビューと合わせてご確認ください。</sub>"
+
+          # 既存の Gemini コメントを探して更新、なければ新規作成
+          # --body-file を使ってマルチライン対応
+          echo "$COMMENT_BODY" > /tmp/comment.md
+
+          # 既存の Gemini CLI コメントがあれば ID を取得
+          EXISTING_COMMENT_ID=$(gh pr view ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }} \
+            --json comments \
+            --jq '.comments[] | select(.body | startswith("## 🤖 Gemini CLI")) | .databaseId' \
+            2>/dev/null | head -1 || true)
+
+          if [ -n "$EXISTING_COMMENT_ID" ]; then
+            # 既存コメントを更新
+            gh api \
+              --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              /repos/${{ github.repository }}/issues/comments/$EXISTING_COMMENT_ID \
+              --field body="$(cat /tmp/comment.md)"
+            echo "既存の Gemini CLI コメントを更新しました（ID: $EXISTING_COMMENT_ID）"
+          else
+            # 新規コメントを投稿
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --repo ${{ github.repository }} \
+              --body-file /tmp/comment.md
+            echo "Gemini CLI レビューコメントを新規投稿しました"
+          fi
+
+      # ──────────────────────────────────────────────────────
+      # 8. Swift ファイルの変更がない場合のスキップ通知
+      # ──────────────────────────────────────────────────────
+      - name: Swift ファイルの変更なし（レビュースキップ）
+        if: steps.get-diff.outputs.has_swift_changes == 'false'
+        run: |
+          echo "## ℹ️ Gemini CLI レビュー" >> $GITHUB_STEP_SUMMARY
+          echo "Swift ファイルの変更がないため、Gemini CLI レビューをスキップしました。" >> $GITHUB_STEP_SUMMARY
