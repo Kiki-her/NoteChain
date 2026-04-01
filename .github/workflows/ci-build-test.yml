@@ -1,0 +1,195 @@
+# ============================================================
+# ci-build-test.yml
+# NoteChain — ビルド & テスト CI ワークフロー
+#
+# トリガー:
+#   - push: main / develop ブランチ
+#   - pull_request: main ブランチへの PR
+#
+# ランナー: macos-15（Xcode 26 がプリインストール）
+# 目的: Swift 6 strict concurrency を含むビルド確認 + Swift Testing 実行
+# コスト: GitHub Actions は public リポジトリで無制限無料
+# ============================================================
+
+name: CI — Build & Test
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+
+# 同じ PR への連続プッシュで古いワークフローをキャンセルする
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test (Xcode 26 / iOS 17+)
+    runs-on: macos-15
+    timeout-minutes: 60  # ビルドタイムアウト（分）
+
+    steps:
+      # ──────────────────────────────────────────────────────
+      # 1. ソースコードをチェックアウト
+      # ──────────────────────────────────────────────────────
+      - name: ソースコードをチェックアウト
+        uses: actions/checkout@v4
+        with:
+          # サブモジュールが存在する場合は再帰的に取得
+          submodules: recursive
+
+      # ──────────────────────────────────────────────────────
+      # 2. Xcode 26.3 を選択
+      #    macos-15 ランナーには複数の Xcode バージョンが入っている
+      #    /Applications/Xcode_26.3.app が存在することを前提とする
+      # ──────────────────────────────────────────────────────
+      - name: Xcode 26.3 を選択
+        run: |
+          # 利用可能な Xcode 一覧を確認（デバッグ用）
+          echo "=== インストール済み Xcode 一覧 ==="
+          ls /Applications/ | grep -i xcode || true
+
+          # Xcode 26.3 を選択（パスが異なる場合は調整）
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+
+          # 選択確認
+          echo "=== 選択中の Xcode ==="
+          xcode-select -p
+          xcodebuild -version
+
+      # ──────────────────────────────────────────────────────
+      # 3. Swift Package Manager キャッシュ
+      #    依存関係が増えた場合のビルド高速化
+      # ──────────────────────────────────────────────────────
+      - name: SPM キャッシュを復元
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      # ──────────────────────────────────────────────────────
+      # 4. ビルド（コード署名なし）
+      #    CODE_SIGNING_ALLOWED=NO: CI 環境では証明書不要
+      #    SWIFT_STRICT_CONCURRENCY=complete: Swift 6 strict mode
+      #    IPHONEOS_DEPLOYMENT_TARGET: PRD 規定の最低 OS バージョン
+      # ──────────────────────────────────────────────────────
+      - name: ビルド（NoteChain scheme / Debug / コード署名なし）
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -scheme NoteChain \
+            -project NoteChain.xcodeproj \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            SWIFT_STRICT_CONCURRENCY=complete \
+            SWIFT_VERSION=6.0 \
+            IPHONEOS_DEPLOYMENT_TARGET=17.0 \
+            | xcpretty --color --simple \
+            && exit "${PIPESTATUS[0]}"
+        env:
+          # xcpretty が存在しない場合のフォールバック用
+          NSUnbufferedIO: YES
+
+      # ──────────────────────────────────────────────────────
+      # 5. xcpretty のインストール（ログ整形ツール）
+      #    ビルドログを読みやすい形式に変換する
+      #    macos-15 にはプリインストールされていない場合がある
+      # ──────────────────────────────────────────────────────
+      - name: xcpretty をインストール
+        if: always()
+        run: |
+          gem install xcpretty --no-document 2>/dev/null || true
+
+      # ──────────────────────────────────────────────────────
+      # 6. テスト実行（Swift Testing フレームワーク）
+      #    -enableCodeCoverage YES: カバレッジレポートを生成
+      #    -resultBundlePath: xcresult ファイルの出力先
+      #    NoteChainTests: Swift Testing ターゲット
+      # ──────────────────────────────────────────────────────
+      - name: テスト実行（NoteChainTests / Swift Testing）
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -scheme NoteChain \
+            -project NoteChain.xcodeproj \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest' \
+            -configuration Debug \
+            -enableCodeCoverage YES \
+            -resultBundlePath TestResults/NoteChain.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            SWIFT_STRICT_CONCURRENCY=complete \
+            SWIFT_VERSION=6.0 \
+            IPHONEOS_DEPLOYMENT_TARGET=17.0 \
+            | xcpretty --color --report junit --output TestResults/junit.xml \
+            && exit "${PIPESTATUS[0]}"
+
+      # ──────────────────────────────────────────────────────
+      # 7. テスト結果（JUnit XML）を artifact としてアップロード
+      #    GitHub Actions の Test Summary に統合される
+      #    retention-days: 30 日間保存
+      # ──────────────────────────────────────────────────────
+      - name: テスト結果 JUnit XML をアップロード
+        uses: actions/upload-artifact@v4
+        if: always()  # テスト失敗時にも結果を保存する
+        with:
+          name: test-results-junit
+          path: TestResults/junit.xml
+          retention-days: 30
+
+      # ──────────────────────────────────────────────────────
+      # 8. xcresult バンドルを artifact としてアップロード
+      #    Xcode で開いて詳細なテスト結果・カバレッジを確認できる
+      # ──────────────────────────────────────────────────────
+      - name: xcresult バンドルをアップロード
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-xcresult
+          path: TestResults/NoteChain.xcresult
+          retention-days: 14
+
+      # ──────────────────────────────────────────────────────
+      # 9. JUnit テスト結果を GitHub PR / Checks に表示
+      #    テスト失敗時に PR 上でどのテストが落ちたか確認できる
+      # ──────────────────────────────────────────────────────
+      - name: テスト結果を GitHub Checks に公開
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: TestResults/junit.xml
+          check_name: Swift Testing Results
+          fail_on_failure: true
+          require_tests: true
+          detailed_summary: true
+
+      # ──────────────────────────────────────────────────────
+      # 10. コードカバレッジレポートの生成（オプション）
+      #     xcresult から coverage.json を抽出してサマリーに表示
+      # ──────────────────────────────────────────────────────
+      - name: コードカバレッジをサマリーに出力
+        if: success()
+        run: |
+          echo "## 📊 コードカバレッジ" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # xcresult からカバレッジデータを取得
+          if [ -d "TestResults/NoteChain.xcresult" ]; then
+            xcrun xccov view --report --json TestResults/NoteChain.xcresult 2>/dev/null \
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); [print(f"| {t[\"name\"]} | {t[\"lineCoverage\"]*100:.1f}% |") for t in d.get("targets",[]) if "NoteChain" in t["name"] and "Tests" not in t["name"]]' \
+              >> $GITHUB_STEP_SUMMARY \
+              || echo "カバレッジデータの取得に失敗しました" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "xcresult が見つかりません" >> $GITHUB_STEP_SUMMARY
+          fi

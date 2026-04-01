@@ -1,0 +1,361 @@
+# ============================================================
+# gemini-changelog.yml
+# NoteChain — Gemini CLI によるリリースノート自動生成
+#
+# トリガー: release [published]
+#           GitHub の Releases 画面で "Publish release" を押したとき
+#
+# ランナー: ubuntu-latest（macOS 不要・コストゼロ）
+# 目的: 前回タグからのコミット一覧を Gemini CLI に渡し、
+#       日英バイリンガルのリリースノートを自動生成して
+#       GitHub Release の description を更新する
+#
+# 必要な Secrets:
+#   GOOGLE_API_KEY — Google AI Studio の API キー（GEMINI_API_KEY として使用）
+#   GITHUB_TOKEN   — Release 更新用（自動付与、追加設定不要）
+#
+# 出力形式:
+#   - カテゴリ分類: New Features / Bug Fixes / Performance / Breaking Changes
+#   - 日英バイリンガル（日本語 → English の順）
+#   - App Store のリリースノート形式（ユーザー向けの平易な言葉）
+# ============================================================
+
+name: Release Notes — Gemini CLI
+
+on:
+  release:
+    types: [published]
+
+# Release の書き込み権限が必要
+permissions:
+  contents: write
+
+jobs:
+  generate-release-notes:
+    name: Gemini CLI でリリースノートを生成
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # ──────────────────────────────────────────────────────
+      # 1. ソースコードをチェックアウト（全タグ履歴を取得）
+      #    fetch-depth: 0 は必須（git log --oneline vX.X.X..HEAD に必要）
+      # ──────────────────────────────────────────────────────
+      - name: ソースコードをチェックアウト（全履歴）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ──────────────────────────────────────────────────────
+      # 2. Node.js 20 をセットアップ
+      #    Gemini CLI の実行に必要
+      # ──────────────────────────────────────────────────────
+      - name: Node.js 20 をセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ──────────────────────────────────────────────────────
+      # 3. Gemini CLI をインストール
+      #    公式パッケージ: @google/gemini-cli
+      # ──────────────────────────────────────────────────────
+      - name: Gemini CLI をインストール（@google/gemini-cli）
+        run: |
+          npm install -g @google/gemini-cli
+          echo "=== Gemini CLI バージョン ==="
+          gemini --version || true
+
+      # ──────────────────────────────────────────────────────
+      # 4. リリースメタデータを取得
+      #    現在タグと前回タグを特定する
+      # ──────────────────────────────────────────────────────
+      - name: リリースメタデータを取得
+        id: release-meta
+        run: |
+          # 現在のリリースタグ
+          CURRENT_TAG="${{ github.event.release.tag_name }}"
+          echo "CURRENT_TAG=$CURRENT_TAG" >> $GITHUB_OUTPUT
+          echo "現在のタグ: $CURRENT_TAG"
+
+          # 前回のタグを取得（現在タグを除いた直前のタグ）
+          PREV_TAG=$(git tag --sort=-version:refname \
+            | grep -v "^${CURRENT_TAG}$" \
+            | head -1 \
+            || true)
+
+          if [ -z "$PREV_TAG" ]; then
+            # 初回リリースの場合: 全コミット履歴を使用
+            echo "初回リリースのため全コミット履歴を使用します"
+            PREV_TAG="$(git rev-list --max-parents=0 HEAD)"
+            echo "IS_FIRST_RELEASE=true" >> $GITHUB_OUTPUT
+          else
+            echo "前回のタグ: $PREV_TAG"
+            echo "IS_FIRST_RELEASE=false" >> $GITHUB_OUTPUT
+          fi
+
+          echo "PREV_TAG=$PREV_TAG" >> $GITHUB_OUTPUT
+
+          # タグ間のコミット数を確認
+          COMMIT_COUNT=$(git rev-list --count "${PREV_TAG}..${CURRENT_TAG}" 2>/dev/null || echo "0")
+          echo "コミット数: $COMMIT_COUNT"
+          echo "COMMIT_COUNT=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+
+      # ──────────────────────────────────────────────────────
+      # 5. 前回タグからのコミット一覧を取得
+      #    --oneline: コンパクトな形式
+      #    マージコミットを除外して本質的な変更のみを取得
+      # ──────────────────────────────────────────────────────
+      - name: コミット一覧を取得
+        id: get-commits
+        run: |
+          CURRENT_TAG="${{ steps.release-meta.outputs.CURRENT_TAG }}"
+          PREV_TAG="${{ steps.release-meta.outputs.PREV_TAG }}"
+
+          echo "=== ${PREV_TAG} から ${CURRENT_TAG} までのコミット一覧 ==="
+
+          # マージコミットを除いた詳細なコミット情報を取得
+          COMMITS=$(git log \
+            "${PREV_TAG}..${CURRENT_TAG}" \
+            --no-merges \
+            --pretty=format:"- %s (%h)" \
+            2>/dev/null || true)
+
+          if [ -z "$COMMITS" ]; then
+            echo "コミットが見つかりませんでした"
+            echo "has_commits=false" >> $GITHUB_OUTPUT
+          else
+            echo "$COMMITS"
+            echo "has_commits=true" >> $GITHUB_OUTPUT
+
+            # コミット数が多すぎる場合は最新 50 件に制限
+            COMMITS_LIMITED=$(echo "$COMMITS" | head -50)
+            TOTAL_COUNT=$(echo "$COMMITS" | wc -l)
+            if [ "$TOTAL_COUNT" -gt 50 ]; then
+              OMIT_LINE="- ...(他 $((TOTAL_COUNT - 50)) 件のコミットは省略)"
+              COMMITS_LIMITED=$(printf '%s\n%s' "$COMMITS_LIMITED" "$OMIT_LINE")
+            fi
+
+            # 一時ファイルに保存
+            echo "$COMMITS_LIMITED" > /tmp/commits.txt
+          fi
+
+          # 変更されたファイルのカテゴリを特定（コンテキスト情報として）
+          CHANGED_FILES=$(git diff \
+            --name-only \
+            "${PREV_TAG}..${CURRENT_TAG}" \
+            2>/dev/null \
+            | head -30 \
+            || true)
+          echo "$CHANGED_FILES" > /tmp/changed_files.txt
+
+      # ──────────────────────────────────────────────────────
+      # 6. Gemini CLI でリリースノートを生成
+      #
+      #    プロンプト設計:
+      #    - NoteChain アプリのユーザー向けリリースノート
+      #    - Conventional Commits 形式のコミットを解析
+      #    - feat / fix / perf / refactor / chore を分類
+      #    - 日英バイリンガル出力
+      #    - App Store リリースノート形式（技術的すぎない平易な言葉）
+      # ──────────────────────────────────────────────────────
+      - name: Gemini CLI でリリースノートを生成
+        id: generate-notes
+        if: steps.get-commits.outputs.has_commits == 'true'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          CURRENT_TAG="${{ steps.release-meta.outputs.CURRENT_TAG }}"
+          PREV_TAG="${{ steps.release-meta.outputs.PREV_TAG }}"
+          IS_FIRST="${{ steps.release-meta.outputs.IS_FIRST_RELEASE }}"
+
+          # 変更されたファイルを確認（機能エリアの特定）
+          CHANGED_FILES=$(cat /tmp/changed_files.txt 2>/dev/null || echo "")
+          COMMITS=$(cat /tmp/commits.txt 2>/dev/null || echo "")
+
+          # プロンプトを構築
+          PROMPT="あなたは NoteChain iOS アプリ（プライバシーファーストの AI ボイスメモアプリ）のリリースノートライターです。
+
+          以下のコミット一覧から、App Store と GitHub Release の両方に使えるリリースノートを生成してください。
+
+          === リリース情報 ===
+          - 現在バージョン: ${CURRENT_TAG}
+          - 前バージョン: ${PREV_TAG}
+          - 初回リリース: ${IS_FIRST}
+
+          === 変更されたファイルのカテゴリ ===
+          ${CHANGED_FILES}
+
+          === コミット一覧 ===
+          ${COMMITS}
+
+          === NoteChain の主要機能（コンテキスト） ===
+          - 音声録音とリアルタイム文字起こし（SpeechAnalyzer iOS 26+ / SFSpeechRecognizer iOS 17+）
+          - AI キーワード抽出（NaturalLanguage NLTagger）
+          - ノート一覧・検索・フィルタ（SwiftData）
+          - 多言語対応（日本語・英語・スペイン語）
+          - StoreKit 2 サブスクリプション（月額 \$3.99 / 年額 \$29.99）
+
+          === 出力要件 ===
+
+          以下の形式で**日本語**と**英語**の両方でリリースノートを生成してください。
+          技術者向けではなく、一般ユーザーが理解できる平易な言葉を使ってください。
+
+          ---
+
+          ## 🎉 NoteChain ${CURRENT_TAG} リリースノート
+
+          ### 日本語
+
+          #### ✨ 新機能
+          （feat: で始まるコミットから生成。ユーザーに見える新しい機能のみ記載）
+
+          #### 🐛 バグ修正
+          （fix: で始まるコミットから生成）
+
+          #### ⚡ パフォーマンス改善
+          （perf: で始まるコミットから生成）
+
+          #### ⚠️ 破壊的変更（あれば）
+          （BREAKING CHANGE を含むコミットから生成）
+
+          ---
+
+          ### English
+
+          #### ✨ What's New
+          （Same as above in English）
+
+          #### 🐛 Bug Fixes
+          （Same as above in English）
+
+          #### ⚡ Performance
+          （Same as above in English）
+
+          #### ⚠️ Breaking Changes（if any）
+          （Same as above in English）
+
+          ---
+
+          ### 📱 App Store リリースノート（日本語・500文字以内）
+          （App Store の「このバージョンの新機能」欄に直接貼り付けられる形式）
+
+          ### 📱 App Store Release Notes (English, 500 chars max)
+          （Ready to paste into App Store Connect）
+
+          ---
+
+          内部実装の変更（refactor:, chore:, ci:, docs: など）はユーザー向けリリースノートに含めないでください。
+          コミットに feat/fix/perf などの conventional commit プレフィックスがなくても、内容から判断して適切に分類してください。
+          変更がない場合は「このバージョンではマイナーな改善と安定性の向上が行われました」と記載してください。"
+
+          # Gemini CLI 実行
+          RESULT=$(echo "" | gemini \
+            --yolo \
+            -m gemini-2.5-flash \
+            --output-format json \
+            -p "$PROMPT" \
+            2>/dev/null)
+
+          # JSON から response を抽出
+          NOTES=$(echo "$RESULT" | jq -r '.response // "リリースノートの生成に失敗しました"' 2>/dev/null \
+            || echo "Gemini CLI の実行に失敗しました。GOOGLE_API_KEY を確認してください。")
+
+          # 結果を保存（マルチライン対応）
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          echo "$NOTES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+          # 一時ファイルにも保存（GitHub Release 更新で使用）
+          echo "$NOTES" > /tmp/release_notes.md
+
+          # ステップサマリーに表示
+          echo "## 📝 生成されたリリースノート" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "$NOTES" >> $GITHUB_STEP_SUMMARY
+
+          echo "リリースノートの生成が完了しました"
+
+      # ──────────────────────────────────────────────────────
+      # 7. GitHub Release の description を更新
+      #    gh api を使って既存 Release の body を Gemini 生成ノートで更新
+      # ──────────────────────────────────────────────────────
+      - name: GitHub Release の description を更新
+        if: steps.generate-notes.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_ID="${{ github.event.release.id }}"
+
+          # /tmp/release_notes.md の内容で Release body を更新
+          NOTES_CONTENT=$(cat /tmp/release_notes.md)
+
+          # GitHub API で Release body を更新
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/releases/$RELEASE_ID \
+            --field body="$NOTES_CONTENT"
+
+          echo "GitHub Release の description を更新しました"
+          echo "Release URL: ${{ github.event.release.html_url }}"
+
+      # ──────────────────────────────────────────────────────
+      # 8. コミットがない場合のフォールバック処理
+      #    タグ間にコミットがない（または取得失敗）の場合
+      # ──────────────────────────────────────────────────────
+      - name: コミットなし — フォールバックノートを適用
+        if: steps.get-commits.outputs.has_commits == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_ID="${{ github.event.release.id }}"
+          CURRENT_TAG="${{ steps.release-meta.outputs.CURRENT_TAG }}"
+
+          FALLBACK_NOTES="## 🎉 NoteChain ${CURRENT_TAG}
+
+          ### 日本語
+          このバージョンではマイナーな改善と安定性の向上が行われました。
+
+          ### English
+          This release includes minor improvements and stability fixes.
+
+          ---
+          *このリリースノートは自動生成されました。*"
+
+          gh api \
+            --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/releases/$RELEASE_ID \
+            --field body="$FALLBACK_NOTES"
+
+          echo "フォールバックノートを適用しました"
+
+      # ──────────────────────────────────────────────────────
+      # 9. 生成されたリリースノートを artifact として保存
+      #    後から確認や App Store への貼り付けに使用
+      # ──────────────────────────────────────────────────────
+      - name: リリースノートを artifact として保存
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-notes-${{ github.event.release.tag_name }}
+          path: /tmp/release_notes.md
+          retention-days: 90  # 90 日間保存（App Store 提出まで保持）
+          if-no-files-found: ignore
+
+      # ──────────────────────────────────────────────────────
+      # 10. 完了サマリー
+      # ──────────────────────────────────────────────────────
+      - name: 完了サマリー
+        if: always()
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "## 📦 リリース情報" >> $GITHUB_STEP_SUMMARY
+          echo "| 項目 | 値 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| リリースタグ | ${{ github.event.release.tag_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 前バージョン | ${{ steps.release-meta.outputs.PREV_TAG }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| コミット数 | ${{ steps.release-meta.outputs.COMMIT_COUNT }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 生成時刻 | $(date -u '+%Y-%m-%d %H:%M UTC') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release URL | ${{ github.event.release.html_url }} |" >> $GITHUB_STEP_SUMMARY

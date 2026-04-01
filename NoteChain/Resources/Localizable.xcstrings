@@ -1,0 +1,363 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "tab_record" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Record" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "録音" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Grabar" } }
+      }
+    },
+    "tab_notes" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notes" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "メモ" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Notas" } }
+      }
+    },
+    "tab_settings" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "設定" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ajustes" } }
+      }
+    },
+    "recording_start_button" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Start Recording" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "録音開始" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Iniciar grabación" } }
+      }
+    },
+    "recording_stop_button" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stop" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "停止" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Detener" } }
+      }
+    },
+    "recording_listening" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Listening…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "聞き取り中…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Escuchando…" } }
+      }
+    },
+    "recording_tap_to_start" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tap the mic to start recording" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "マイクをタップして録音を開始" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Toca el micrófono para grabar" } }
+      }
+    },
+    "recording_saving" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saving note…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存中…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardando nota…" } }
+      }
+    },
+    "notes_list_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "My Notes" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "マイメモ" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Mis notas" } }
+      }
+    },
+    "notes_search_placeholder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search notes…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "メモを検索…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Buscar notas…" } }
+      }
+    },
+    "notes_empty_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Notes Yet" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "メモがありません" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sin notas" } }
+      }
+    },
+    "notes_empty_description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Record your first voice note to get started." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "最初の音声メモを録音してください。" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Graba tu primera nota de voz para comenzar." } }
+      }
+    },
+    "sort_newest" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Newest First" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "新しい順" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Más reciente primero" } }
+      }
+    },
+    "sort_oldest" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Oldest First" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "古い順" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Más antiguo primero" } }
+      }
+    },
+    "sort_longest" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Longest First" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "長い順" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Más largo primero" } }
+      }
+    },
+    "sort_most_keywords" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Most Keywords" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "キーワード多い順" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Más palabras clave" } }
+      }
+    },
+    "keyword_badge_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Keywords" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "キーワード" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Palabras clave" } }
+      }
+    },
+    "settings_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "設定" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ajustes" } }
+      }
+    },
+    "settings_recording_language" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Recording Language" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "録音言語" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Idioma de grabación" } }
+      }
+    },
+    "settings_ui_language" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "App Language" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "アプリ言語" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Idioma de la app" } }
+      }
+    },
+    "settings_subscription" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Subscription" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "サブスクリプション" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Suscripción" } }
+      }
+    },
+    "settings_privacy_policy" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Privacy Policy" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "プライバシーポリシー" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Política de privacidad" } }
+      }
+    },
+    "paywall_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unlock NoteChain Pro" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "NoteChain Pro を解放" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Desbloquea NoteChain Pro" } }
+      }
+    },
+    "paywall_subtitle" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unlimited voice notes with AI keyword extraction" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "AI キーワード抽出で無制限の音声メモ" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Notas de voz ilimitadas con extracción de palabras clave por IA" } }
+      }
+    },
+    "paywall_free_trial" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Start 14-Day Free Trial" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "14日間無料トライアルを開始" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Iniciar prueba gratuita de 14 días" } }
+      }
+    },
+    "paywall_restore" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Restore Purchases" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "購入を復元" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Restaurar compras" } }
+      }
+    },
+    "paywall_close" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Close" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "閉じる" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cerrar" } }
+      }
+    },
+    "onboarding_page1_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Voice Notes, Reimagined" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "音声メモを、もっとスマートに" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Notas de voz reinventadas" } }
+      }
+    },
+    "onboarding_page1_description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Record your thoughts and ideas. NoteChain transcribes them in real time." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "考えやアイデアを録音するだけ。NoteChain がリアルタイムで文字起こしします。" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Graba tus pensamientos e ideas. NoteChain los transcribe en tiempo real." } }
+      }
+    },
+    "onboarding_page2_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "AI Keyword Extraction" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "AI キーワード抽出" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Extracción de palabras clave con IA" } }
+      }
+    },
+    "onboarding_page2_description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Automatically extract the most important keywords from your notes for easy search and discovery." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "メモから重要なキーワードを自動抽出。検索や整理が驚くほど簡単になります。" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Extrae automáticamente las palabras clave más importantes para buscar y descubrir notas fácilmente." } }
+      }
+    },
+    "onboarding_page3_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "100% On-Device Privacy" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "完全オンデバイス・プライバシー保護" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Privacidad 100% en el dispositivo" } }
+      }
+    },
+    "onboarding_page3_description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All processing happens on your device. Your voice and notes never leave your phone." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "すべての処理はデバイス上で実行。音声やメモがサーバーに送られることは一切ありません。" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Todo el procesamiento ocurre en tu dispositivo. Tu voz y notas nunca salen de tu teléfono." } }
+      }
+    },
+    "onboarding_next" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Next" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "次へ" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Siguiente" } }
+      }
+    },
+    "onboarding_get_started" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Get Started" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "はじめる" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Empezar" } }
+      }
+    },
+    "onboarding_back" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Back" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "戻る" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Atrás" } }
+      }
+    },
+    "error_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Error" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "エラー" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Error" } }
+      }
+    },
+    "ok_button" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "OK" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "OK" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Aceptar" } }
+      }
+    },
+    "permission_microphone_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Microphone Access Required" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "マイクへのアクセスが必要です" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Se requiere acceso al micrófono" } }
+      }
+    },
+    "permission_microphone_description" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "NoteChain needs microphone access to record your voice notes. Please enable it in Settings." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "音声メモを録音するためにマイクへのアクセスが必要です。設定から許可してください。" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "NoteChain necesita acceso al micrófono para grabar notas de voz. Habilítalo en Configuración." } }
+      }
+    },
+    "notification_trial_day2_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enjoying NoteChain Pro?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "NoteChain Pro を使ってみていかがですか？" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "¿Disfrutando NoteChain Pro?" } }
+      }
+    },
+    "notification_trial_day2_body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "You have 12 days left in your free trial. Keep recording!" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "無料トライアルの残り12日。録音を続けましょう！" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Te quedan 12 días de prueba gratuita. ¡Sigue grabando!" } }
+      }
+    },
+    "notification_trial_day7_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "1 Week Left in Your Trial" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "トライアル残り1週間" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "1 semana restante en tu prueba" } }
+      }
+    },
+    "notification_trial_day7_body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Subscribe now to keep all your notes and features." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "今すぐ購読してメモと機能を継続利用しましょう。" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Suscríbete ahora para conservar todas tus notas y funciones." } }
+      }
+    },
+    "notification_trial_day13_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Trial Ends Tomorrow!" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "トライアルは明日終了します！" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "¡La prueba termina mañana!" } }
+      }
+    },
+    "notification_trial_day13_body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Don't lose access to your voice notes. Subscribe today." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "音声メモへのアクセスを失わないように。今日中に購読してください。" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No pierdas acceso a tus notas de voz. Suscríbete hoy." } }
+      }
+    },
+    "note_detail_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Note Detail" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "メモ詳細" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Detalle de nota" } }
+      }
+    },
+    "note_detail_transcript" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Transcript" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "文字起こし" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Transcripción" } }
+      }
+    },
+    "note_detail_keywords" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Keywords" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "キーワード" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Palabras clave" } }
+      }
+    },
+    "note_detail_delete" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete Note" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "メモを削除" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Eliminar nota" } }
+      }
+    },
+    "language_picker_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Recording Language" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "録音言語" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Idioma de grabación" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

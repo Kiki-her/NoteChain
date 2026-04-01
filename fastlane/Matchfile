@@ -1,0 +1,67 @@
+# fastlane/Matchfile
+# Match — 証明書・プロビジョニングプロファイルの Git 管理
+# ドキュメント: https://docs.fastlane.tools/actions/match/
+#
+# 初回セットアップ手順:
+#   1. 証明書用のプライベート Git リポジトリを作成する
+#      例: https://github.com/yourcompany/notechain-certificates (private)
+#   2. 下記 git_url に URL を設定する
+#   3. `bundle exec fastlane match_init` を実行して初期化する
+#   4. MATCH_PASSWORD をチームで共有し、CI/CD シークレットに登録する
+#
+# セキュリティ注意:
+#   - 証明書リポジトリは必ず private にすること
+#   - MATCH_PASSWORD は環境変数で管理（このファイルには書かない）
+#   - このファイル自体はプロジェクトリポジトリに含める（URL は機密ではない）
+
+# ──────────────────────────────────────────────────────────────
+# 証明書リポジトリ
+# ──────────────────────────────────────────────────────────────
+
+# 証明書・プロビジョニングプロファイルを保存する Git リポジトリの URL
+git_url "https://github.com/yourcompany/notechain-certificates.git"  # 要変更
+
+# Git ブランチ（デフォルト: master）
+git_branch "main"
+
+# ──────────────────────────────────────────────────────────────
+# 配信タイプ
+# ──────────────────────────────────────────────────────────────
+
+# "appstore"    — App Store / TestFlight 配信用
+# "adhoc"       — Ad Hoc 配信用（特定デバイスへの配信）
+# "development" — 開発用
+# "enterprise"  — In-House 配信用（Enterprise Program のみ）
+type "appstore"
+
+# ──────────────────────────────────────────────────────────────
+# アプリ識別子
+# ──────────────────────────────────────────────────────────────
+
+# Appfile の app_identifier と一致させる
+app_identifier "com.yourcompany.notechain"  # 要変更
+
+# ──────────────────────────────────────────────────────────────
+# App Store Connect API Key 認証（推奨）
+# ──────────────────────────────────────────────────────────────
+# Fastfile の setup_api_key で設定されるため、ここでは個別設定不要
+# api_key_path "fastlane/AuthKey.p8"  # ファイルパス指定の場合のみ有効
+
+# ──────────────────────────────────────────────────────────────
+# ストレージオプション
+# ──────────────────────────────────────────────────────────────
+
+# Git コミット時に使用するユーザー名
+# git_full_name "NoteChain Bot"
+# git_user_email "ci@notechain.example.com"
+
+# 証明書を暗号化するパスワード（環境変数 MATCH_PASSWORD を使う）
+# storage_mode は "git"（デフォルト）のまま
+# 他の選択肢: "google_cloud", "s3", "gitlab_secure_files"
+
+# ──────────────────────────────────────────────────────────────
+# 証明書の再生成オプション
+# ──────────────────────────────────────────────────────────────
+
+# true にすると証明書が期限切れでも新しいものを生成しない（CI 推奨: true）
+# readonly の設定は Fastfile の sync_code_signing で is_ci によって自動切替

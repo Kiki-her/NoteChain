@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "XcodeBuildMCP": {
+      "command": "npx",
+      "args": ["-y", "xcodebuildmcp@latest"],
+      "env": {},
+      "description": "Xcode build, test, archive operations for NoteChain. Compatible with Claude Code and Gemini CLI."
+    }
+  }
+}
