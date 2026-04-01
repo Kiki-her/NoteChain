@@ -1,0 +1,229 @@
+# ============================================================
+# cd-testflight.yml
+# NoteChain — TestFlight CD ワークフロー
+#
+# トリガー: push tags ['v*']
+#           例: git tag v1.0.0 && git push origin v1.0.0
+#               → 自動的に TestFlight にアップロード
+#
+# ランナー: macos-15（Xcode 26 / Fastlane が必要なため macOS 必須）
+# 目的: Fastlane beta レーンを実行して TestFlight にアップロード
+#
+# 必要な Secrets（GitHub リポジトリの Settings > Secrets > Actions に登録）:
+#   ASC_KEY_ID         — App Store Connect API Key ID
+#                        例: XXXXXXXXXX
+#   ASC_ISSUER_ID      — Issuer ID
+#                        例: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+#   ASC_PRIVATE_KEY    — .p8 ファイルの内容（改行を含む文字列をそのまま登録）
+#                        例: -----BEGIN PRIVATE KEY-----\nMIGH...\n-----END PRIVATE KEY-----
+#   MATCH_PASSWORD     — Match リポジトリの暗号化パスワード
+#   MATCH_GIT_URL      — Match 証明書リポジトリの URL
+#                        例: https://github.com/yourcompany/notechain-certificates.git
+#   MATCH_GIT_TOKEN    — Match リポジトリへの読み取り権限 PAT
+#                        （Private リポジトリの場合に必要）
+#
+# 取得方法:
+#   ASC_KEY_ID / ASC_ISSUER_ID / ASC_PRIVATE_KEY:
+#     App Store Connect > ユーザーとアクセス > 統合 > App Store Connect API
+#     → キーを生成してダウンロード（.p8 ファイル）
+# ============================================================
+
+name: CD — TestFlight Deploy
+
+on:
+  push:
+    tags:
+      - 'v*'  # v1.0.0, v1.2.3-beta など全ての v プレフィックスタグ
+
+# TestFlight デプロイに必要な最小権限
+permissions:
+  contents: read
+
+jobs:
+  deploy-testflight:
+    name: TestFlight デプロイ（Fastlane beta）
+    runs-on: macos-15
+    timeout-minutes: 90  # アーカイブ + アップロードで最大 90 分
+
+    steps:
+      # ──────────────────────────────────────────────────────
+      # 1. ソースコードをチェックアウト
+      # ──────────────────────────────────────────────────────
+      - name: ソースコードをチェックアウト
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # タグ情報を含む全履歴を取得（バージョン番号の取得に必要）
+          fetch-depth: 0
+
+      # ──────────────────────────────────────────────────────
+      # 2. Xcode 26.3 を選択
+      # ──────────────────────────────────────────────────────
+      - name: Xcode 26.3 を選択
+        run: |
+          echo "=== インストール済み Xcode 一覧 ==="
+          ls /Applications/ | grep -i xcode || true
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          echo "=== 選択中の Xcode ==="
+          xcode-select -p
+          xcodebuild -version
+          swift --version
+
+      # ──────────────────────────────────────────────────────
+      # 3. Ruby のセットアップ
+      #    Fastlane は Ruby gem として提供される
+      #    macos-15 には Ruby 3.x がプリインストール済みだが
+      #    Gemfile で管理されている場合は bundler を使う
+      # ──────────────────────────────────────────────────────
+      - name: Ruby をセットアップ（Bundler）
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          # Gemfile が存在する場合は依存関係をキャッシュ＆インストール
+          bundler-cache: true
+
+      # ──────────────────────────────────────────────────────
+      # 4. Fastlane のインストール
+      #    Gemfile がある場合は Bundler 経由、ない場合は gem install
+      # ──────────────────────────────────────────────────────
+      - name: Fastlane をインストール
+        run: |
+          if [ -f "Gemfile" ]; then
+            echo "Gemfile が存在するため Bundler 経由でインストールします"
+            bundle install
+            echo "USE_BUNDLER=true" >> $GITHUB_ENV
+          else
+            echo "Gemfile がないため gem install で直接インストールします"
+            gem install fastlane --no-document
+            echo "USE_BUNDLER=false" >> $GITHUB_ENV
+          fi
+
+          # Fastlane バージョン確認
+          echo "=== Fastlane バージョン ==="
+          if [ "$USE_BUNDLER" = "true" ]; then
+            bundle exec fastlane --version
+          else
+            fastlane --version
+          fi
+
+      # ──────────────────────────────────────────────────────
+      # 5. タグ名からバージョン番号を取得
+      #    タグ: v1.2.3 → バージョン: 1.2.3
+      # ──────────────────────────────────────────────────────
+      - name: タグからバージョン番号を取得
+        id: get-version
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          # v プレフィックスを除去（v1.2.3 → 1.2.3）
+          VERSION="${TAG_NAME#v}"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "タグ: $TAG_NAME → バージョン: $VERSION"
+
+      # ──────────────────────────────────────────────────────
+      # 6. App Store Connect API Key を一時ファイルに書き出す
+      #    Fastlane の app_store_connect_api_key で key_filepath または
+      #    key_content を使う。ここでは環境変数から key_content に渡す方式。
+      #    Fastfile の setup_api_key() が環境変数を自動読み取りするので
+      #    環境変数を設定するだけでよい。
+      # ──────────────────────────────────────────────────────
+      - name: App Store Connect API Key を環境変数に設定
+        run: |
+          echo "APP_STORE_CONNECT_API_KEY_KEY_ID=${{ secrets.ASC_KEY_ID }}" >> $GITHUB_ENV
+          echo "APP_STORE_CONNECT_API_KEY_ISSUER_ID=${{ secrets.ASC_ISSUER_ID }}" >> $GITHUB_ENV
+          # ASC_PRIVATE_KEY は改行を含む文字列のため特別な処理が必要
+          echo "APP_STORE_CONNECT_API_KEY_KEY_CONTENT<<EOF" >> $GITHUB_ENV
+          echo "${{ secrets.ASC_PRIVATE_KEY }}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      # ──────────────────────────────────────────────────────
+      # 7. Match 設定
+      #    MATCH_GIT_URL が Secrets に設定されている場合は上書き
+      #    証明書リポジトリへの認証は MATCH_GIT_TOKEN を使う
+      # ──────────────────────────────────────────────────────
+      - name: Match Git URL を設定
+        run: |
+          # MATCH_GIT_URL が設定されている場合は Matchfile を一時的に上書き
+          if [ -n "${{ secrets.MATCH_GIT_URL }}" ]; then
+            # git_url に GitHub PAT を埋め込んだ URL を使用（HTTPS 認証）
+            MATCH_URL_WITH_TOKEN="https://${{ secrets.MATCH_GIT_TOKEN }}@$( \
+              echo "${{ secrets.MATCH_GIT_URL }}" | sed 's|https://||' \
+            )"
+            echo "MATCH_GIT_URL=$MATCH_URL_WITH_TOKEN" >> $GITHUB_ENV
+            echo "Match Git URL を設定しました（トークン認証）"
+          fi
+
+      # ──────────────────────────────────────────────────────
+      # 8. Fastlane beta レーン実行
+      #    Fastfile の :beta レーン:
+      #      1. App Store Connect API 認証
+      #      2. Match で証明書・プロファイル同期（readonly: true）
+      #      3. ビルド番号自動インクリメント（タイムスタンプ）
+      #      4. build_app（アーカイブ + エクスポート）
+      #      5. upload_to_testflight
+      #      6. git タグ（v1.2.3-beta.YYYYMMDDHHII）
+      # ──────────────────────────────────────────────────────
+      - name: Fastlane beta レーンを実行
+        env:
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          # Git 操作のための設定
+          GIT_AUTHOR_NAME: "NoteChain CI"
+          GIT_AUTHOR_EMAIL: "ci@notechain.example.com"
+          GIT_COMMITTER_NAME: "NoteChain CI"
+          GIT_COMMITTER_EMAIL: "ci@notechain.example.com"
+        run: |
+          if [ "$USE_BUNDLER" = "true" ]; then
+            bundle exec fastlane beta
+          else
+            fastlane beta
+          fi
+
+      # ──────────────────────────────────────────────────────
+      # 9. ビルド成果物（IPA / xcarchive）を artifact としてアップロード
+      #    TestFlight アップロード後もローカルで検証できるように保存
+      # ──────────────────────────────────────────────────────
+      - name: ビルド成果物を artifact としてアップロード
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: notechain-build-${{ steps.get-version.outputs.TAG_NAME }}
+          path: |
+            build/NoteChain.ipa
+            build/NoteChain.xcarchive
+          retention-days: 30
+          if-no-files-found: warn
+
+      # ──────────────────────────────────────────────────────
+      # 10. デプロイ完了サマリー
+      # ──────────────────────────────────────────────────────
+      - name: デプロイ完了サマリーを生成
+        if: success()
+        run: |
+          echo "## 🚀 TestFlight デプロイ完了" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 項目 | 値 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| タグ | ${{ steps.get-version.outputs.TAG_NAME }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| バージョン | ${{ steps.get-version.outputs.VERSION }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| デプロイ時刻 | $(date -u '+%Y-%m-%d %H:%M UTC') |" >> $GITHUB_STEP_SUMMARY
+          echo "| ターゲット | TestFlight（内部テスター） |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ App Store Connect でビルドが処理されるまで数分かかります。" >> $GITHUB_STEP_SUMMARY
+
+      # ──────────────────────────────────────────────────────
+      # 11. デプロイ失敗時のサマリー
+      # ──────────────────────────────────────────────────────
+      - name: デプロイ失敗サマリーを生成
+        if: failure()
+        run: |
+          echo "## ❌ TestFlight デプロイ失敗" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "タグ: ${{ steps.get-version.outputs.TAG_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### トラブルシューティング" >> $GITHUB_STEP_SUMMARY
+          echo "1. Secrets の設定を確認（ASC_KEY_ID / ASC_ISSUER_ID / ASC_PRIVATE_KEY / MATCH_PASSWORD）" >> $GITHUB_STEP_SUMMARY
+          echo "2. Match リポジトリへのアクセス権限を確認（MATCH_GIT_TOKEN）" >> $GITHUB_STEP_SUMMARY
+          echo "3. Fastlane のログを確認（上記のステップ詳細）" >> $GITHUB_STEP_SUMMARY
+          echo "4. App Store Connect の API キーが有効か確認" >> $GITHUB_STEP_SUMMARY
