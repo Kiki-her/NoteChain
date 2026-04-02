@@ -18,9 +18,12 @@ struct NoteChainApp: App {
 
     private let modelContainer: ModelContainer = {
         let schema = Schema([Note.self])
+
+        // UIテスト時はインメモリコンテナを使用（データが永続化されない）
+        let isUITesting = ProcessInfo.processInfo.arguments.contains("--ui-testing")
         let config = ModelConfiguration(
             schema: schema,
-            isStoredInMemoryOnly: false
+            isStoredInMemoryOnly: isUITesting
         )
         do {
             return try ModelContainer(for: schema, configurations: [config])
@@ -54,6 +57,11 @@ struct NoteChainApp: App {
             .environment(settingsViewModel)
             .environment(subscriptionManager)
             .task {
+                // UIテスト時はオンボーディングをスキップ
+                if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+                    appState.completeOnboarding()
+                }
+
                 await subscriptionManager.initialize()
                 settingsViewModel.resetWeeklyCountIfNeeded()
             }
