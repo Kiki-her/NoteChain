@@ -14,13 +14,11 @@ struct RecordingView: View {
     @Environment(Router.self) private var router
     @Environment(\.modelContext) private var modelContext
 
-// ✅ 簡易修正：init に modelContext を引数で渡す
+// init に modelContext を引数で渡す
 init(modelContext: ModelContext) {
     _viewModel = State(wrappedValue: RecordingViewModel(modelContext: modelContext))
 }
 
-// 呼び出し元（ContentView）で渡す
-RecordingView(modelContext: modelContext)
 
     var body: some View {
         NavigationStack {
