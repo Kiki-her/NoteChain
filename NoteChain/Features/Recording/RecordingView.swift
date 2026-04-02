@@ -14,11 +14,13 @@ struct RecordingView: View {
     @Environment(Router.self) private var router
     @Environment(\.modelContext) private var modelContext
 
-    init() {
-        // modelContext は .task 内で設定するため、ここでは仮の初期化
-        // 実際の DI は onAppear / .task で行う
-        _viewModel = State(wrappedValue: RecordingViewModel(modelContext: ModelContext(try! ModelContainer(for: Note.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true)))))
-    }
+// ✅ 簡易修正：init に modelContext を引数で渡す
+init(modelContext: ModelContext) {
+    _viewModel = State(wrappedValue: RecordingViewModel(modelContext: modelContext))
+}
+
+// 呼び出し元（ContentView）で渡す
+RecordingView(modelContext: modelContext)
 
     var body: some View {
         NavigationStack {
