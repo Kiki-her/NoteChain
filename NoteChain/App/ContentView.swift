@@ -51,7 +51,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private var recordingTab: some View {
-        RecordingView()
+        RecordingView(modelContext: modelContext)
             .tabItem {
                 Label(AppTab.record.labelKey, systemImage: AppTab.record.systemImage)
             }
