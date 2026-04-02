@@ -14,11 +14,11 @@ struct RecordingView: View {
     @Environment(Router.self) private var router
     @Environment(\.modelContext) private var modelContext
 
-    init() {
-        // modelContext は .task 内で設定するため、ここでは仮の初期化
-        // 実際の DI は onAppear / .task で行う
-        _viewModel = State(wrappedValue: RecordingViewModel(modelContext: ModelContext(try! ModelContainer(for: Note.self, configurations: ModelConfiguration(isStoredInMemoryOnly: true)))))
-    }
+// init に modelContext を引数で渡す
+init(modelContext: ModelContext) {
+    _viewModel = State(wrappedValue: RecordingViewModel(modelContext: modelContext))
+}
+
 
     var body: some View {
         NavigationStack {
@@ -214,7 +214,10 @@ private struct RecordingTimerView: View {
 // MARK: - Preview
 
 #Preview {
-    RecordingView()
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: Note.self, configurations: config)
+    RecordingView(modelContext: container.mainContext)
+        .modelContainer(container)
         .environment(SubscriptionManager())
         .environment(SettingsViewModel())
         .environment(Router())

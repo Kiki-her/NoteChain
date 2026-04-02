@@ -24,7 +24,12 @@ final class RecordingManager {
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         isAudioSessionActive = true
 
-        // 割り込み通知を登録
+        // 重複登録を防ぐため先に解除してから登録
+        NotificationCenter.default.removeObserver(
+            self,
+            name: AVAudioSession.interruptionNotification,
+            object: session
+        )
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleInterruption(_:)),

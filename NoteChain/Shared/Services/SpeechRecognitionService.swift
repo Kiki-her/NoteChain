@@ -207,6 +207,24 @@ final class LegacySpeechService: NSObject, SpeechRecognitionServiceProtocol,
 /// OS バージョンに応じて適切な実装を返すファクトリ。
 enum SpeechRecognitionServiceFactory {
     static func create() -> any SpeechRecognitionServiceProtocol {
+        // UIテスト時は MockSpeechService を返す
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("--ui-testing") {
+            let mock = MockSpeechService()
+            if args.contains("--mock-speech-error") {
+                mock.shouldThrowError = AppError.speechRecognitionUnavailable
+            } else {
+                // デフォルト: volatile → final の順で結果を返す
+                mock.mockResults = [
+                    TranscriptionResult(text: "UIテスト文字起こし", isFinal: false),
+                    TranscriptionResult(text: "UIテスト文字起こし完了", isFinal: true)
+                ]
+            }
+            return mock
+        }
+        #endif
+ 
         if #available(iOS 26, *) {
             return SpeechAnalyzerService()
         } else {
