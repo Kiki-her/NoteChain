@@ -47,7 +47,11 @@ struct RecordingViewModelTests {
         ]
         let sut = try makeViewModel(speechService: mockService)
 
-        // 録音を開始（権限チェックはスキップ）
+        // 権限フラグを強制的に許可状態にする
+        sut.microphonePermissionDenied = false
+        sut.speechPermissionDenied = false
+
+        // 録音を開始
         await sut.toggleRecording(locale: Locale(identifier: "en-US"), canCreateNote: true)
 
         // 少し待って非同期処理を完了させる
