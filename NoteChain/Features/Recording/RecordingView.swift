@@ -214,7 +214,10 @@ private struct RecordingTimerView: View {
 // MARK: - Preview
 
 #Preview {
-    RecordingView()
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(for: Note.self, configurations: config)
+    RecordingView(modelContext: container.mainContext)
+        .modelContainer(container)
         .environment(SubscriptionManager())
         .environment(SettingsViewModel())
         .environment(Router())
